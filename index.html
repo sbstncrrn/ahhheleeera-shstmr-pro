@@ -5,14 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ahhheleeera Shstmr Pro - Optimizador de Rutas</title>
     
-    <!-- Librería CSS de Leaflet para el mapa -->
+    <!-- Configuración PWA para App Instalable -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ff5722">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ahhheleeera Pro">
+
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
     <div class="card">
-        <!-- Logo Ilustrado con Fuego en las Llantas -->
+        <!-- Logo con Fuego Animado -->
         <div class="header-logo">
             <svg width="180" height="80" viewBox="0 0 200 90" xmlns="http://www.w3.org/2000/svg">
                 <path d="M20,50 L40,25 L120,25 L150,50 L180,50 L180,65 L20,65 Z" fill="#333" stroke="#ff5722" stroke-width="3"/>
@@ -36,7 +43,29 @@
             <h1 class="app-title">Ahhheleeera Shstmr Pro</h1>
         </div>
 
-        <p style="font-size: 0.85rem; color: #aaa; text-align: center;">Ingresa las direcciones de los paquetes (una por línea):</p>
+        <!-- Selector de Navegador GPS -->
+        <div class="config-group">
+            <label for="gpsSelect"><strong>🗺️ Navegador GPS preferido:</strong></label>
+            <select id="gpsSelect" onchange="guardarPreferenciaGPS()">
+                <option value="google">Google Maps (Android Auto / CarPlay)</option>
+                <option value="waze">Waze</option>
+            </select>
+        </div>
+
+        <!-- Clave API de TomTom -->
+        <div class="config-group">
+            <label for="tomtomKeyInput"><strong>🔑 Clave API Tráfico TomTom (Opcional):</strong></label>
+            <input type="password" id="tomtomKeyInput" placeholder="Pega tu API Key de TomTom" onchange="guardarApiKeyTomTom()">
+        </div>
+
+        <!-- Callejero / Autocompletado -->
+        <div class="autocomplete-container">
+            <label for="autocompleteInput"><strong>🔍 Callejero (Escribe una dirección):</strong></label>
+            <input type="text" id="autocompleteInput" placeholder="Ej: Catedral 3040, Santiago..." oninput="onDireccionInput()" autocomplete="off">
+            <div id="suggestionsBox" class="suggestions-box"></div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: #aaa; text-align: center; margin-top: 15px;">Lista de direcciones a repartir (una por línea):</p>
         <textarea id="addressInput" placeholder="Ejemplo:&#10;Av. Libertador Bernardo O'Higgins 1050, Santiago&#10;Catedral 3040, Santiago&#10;Providencia 1200, Providencia"></textarea>
         
         <button class="btn btn-primary" onclick="procesarYOptimizar()">🔥 Optimizar Ruta de Reparto</button>
@@ -52,7 +81,6 @@
         <div id="stopsList"></div>
     </div>
 
-    <!-- Scripts de la aplicación -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
 </body>
