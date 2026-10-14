@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ahhheleeera Shstmr Pro - Optimizador de Rutas</title>
     
+    <!-- Librería CSS de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
@@ -14,6 +15,7 @@
         .header-logo { text-align: center; margin-bottom: 15px; }
         .app-title { font-size: 1.6rem; color: #ff5722; margin: 10px 0 5px 0; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
         
+        /* Animación para el fuego de las ruedas */
         @keyframes fuegoAnim {
             0% { transform: scale(0.9) rotate(-3deg); opacity: 0.8; }
             50% { transform: scale(1.15) rotate(3deg); opacity: 1; filter: drop-shadow(0 0 8px #ff5722); }
@@ -22,14 +24,17 @@
         .flame-particle { transform-origin: center; animation: fuegoAnim 0.25s infinite alternate ease-in-out; }
 
         textarea { width: 100%; height: 110px; padding: 10px; border: 1px solid #444; background: #2a2a2a; color: #fff; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+        
+        /* Estilos de botones y enlaces estilo botón compatibles con iOS */
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; text-align: center; text-decoration: none; box-sizing: border-box; transition: 0.2s; }
         .btn-primary { background: linear-gradient(135deg, #ff5722, #e64a19); color: white; margin-bottom: 10px; }
-        .btn-success { background: linear-gradient(135deg, #28a745, #218838); color: white; }
-        .btn-secondary { background-color: #444; color: white; margin-top: 5px; }
+        .btn-success { background: linear-gradient(135deg, #28a745, #218838); color: white; margin-top: 8px; }
+        .btn-secondary { background-color: #444; color: white; margin-top: 8px; }
+        
         .stop-card { background: #2a2a2a; border-left: 5px solid #ff5722; padding: 12px; margin-bottom: 10px; border-radius: 6px; }
         .badge { background: #ff5722; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
         #status { font-size: 0.9rem; color: #bbb; margin-bottom: 10px; text-align: center; }
-        #map { width: 100%; height: 350px; border-radius: 10px; margin-top: 15px; border: 1px solid #444; }
+        #map { width: 100%; height: 320px; border-radius: 10px; margin-top: 15px; border: 1px solid #444; }
         .number-icon { background-color: #ff5722; color: white; border-radius: 50%; border: 2px solid white; font-weight: bold; text-align: center; line-height: 24px; font-size: 12px; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
     </style>
 </head>
@@ -62,7 +67,7 @@
         <p style="font-size: 0.85rem; color: #aaa; text-align: center;">Ingresa las direcciones de los paquetes (una por línea):</p>
         <textarea id="addressInput" placeholder="Ejemplo:&#10;Av. Libertador Bernardo O'Higgins 1050, Santiago&#10;Catedral 3040, Santiago&#10;Providencia 1200, Providencia"></textarea>
         
-        <button class="btn-primary" onclick="procesarYOptimizar()">🔥 Optimizar Ruta de Reparto</button>
+        <button class="btn btn-primary" onclick="procesarYOptimizar()">🔥 Optimizar Ruta de Reparto</button>
         <div id="status"></div>
     </div>
 
@@ -111,7 +116,7 @@
                     return { address: direccion, lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
                 }
             } catch (error) {
-                console.error("Error al geocodificar:", error);
+                console.error("Error de geocodificación:", error);
             }
             return null;
         }
@@ -144,38 +149,52 @@
             const statusDiv = document.getElementById('status');
             const rawText = document.getElementById('addressInput').value.trim();
             if (!rawText) {
-                alert("Por favor ingresa las direcciones.");
+                alert("Por favor ingresa al menos una dirección.");
                 return;
             }
 
             const lineas = rawText.split('\n').filter(line => line.trim() !== '');
-            statusDiv.innerText = `Procesando ${lineas.length} paquetes...`;
+            statusDiv.innerText = `Obteniendo ubicación GPS...`;
+
+            // Configuración de GPS específica para compatibilidad con iOS Safari
+            const geoOptions = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            };
+
+            if (!navigator.geolocation) {
+                alert("Tu navegador no soporta geolocalización GPS.");
+                return;
+            }
 
             navigator.geolocation.getCurrentPosition(async (position) => {
-                const origen = { address: "Origen", lat: position.coords.latitude, lon: position.coords.longitude };
+                const origen = { address: "Origen Actual", lat: position.coords.latitude, lon: position.coords.longitude };
                 let puntosValidos = [];
 
                 for (let i = 0; i < lineas.length; i++) {
-                    statusDiv.innerText = `Obteniendo coordenadas (${i + 1}/${lineas.length})...`;
+                    statusDiv.innerText = `Buscando coordenadas de entrega (${i + 1}/${lineas.length})...`;
                     let res = await geocodificarDireccion(lineas[i]);
                     if (res) puntosValidos.push(res);
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 400));
                 }
 
                 if (puntosValidos.length === 0) {
-                    statusDiv.innerText = "No se encontraron las direcciones.";
+                    statusDiv.innerText = "No se pudieron encontrar las direcciones ingresadas.";
                     return;
                 }
 
-                statusDiv.innerText = "Calculando orden óptimo...";
+                statusDiv.innerText = "Optimizando la secuencia de entregas...";
                 optimizedPath = optimizarRuta(puntosValidos, origen);
 
                 initMap(origen.lat, origen.lon);
                 renderizarRuta();
-                statusDiv.innerText = "¡Ruta lista!";
-            }, () => {
-                alert("Se requiere acceso al GPS.");
-            });
+                statusDiv.innerText = "¡Ruta calculada con éxito!";
+            }, (error) => {
+                console.error("Error GPS:", error);
+                alert("Error al obtener la ubicación GPS. Verifica que Safari tenga permiso de Localización activado en los Ajustes del iPhone.");
+                statusDiv.innerText = "Error de acceso al GPS.";
+            }, geoOptions);
         }
 
         function renderizarRuta() {
@@ -189,14 +208,16 @@
 
             if (optimizedPath.length > 0) {
                 const siguiente = optimizedPath[0];
+                const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${siguiente.lat},${siguiente.lon}&travelmode=driving`;
+                
                 nextAction.innerHTML = `
-                    <p><strong>🔥 Siguiente entrega:</strong><br>${siguiente.address}</p>
-                    <button class="btn-success" onclick="abrirGoogleMaps(${siguiente.lat}, ${siguiente.lon}, 0)">
-                        🚀 Navegar en Google Maps / Android Auto
-                    </button>
+                    <p><strong>🔥 Siguiente entrega prioritaria:</strong><br>${siguiente.address}</p>
+                    <a href="${mapUrl}" target="_blank" rel="noopener" class="btn btn-success" onclick="completarParada(0)">
+                        🚀 Navegar en Maps / Android Auto
+                    </a>
                 `;
             } else {
-                nextAction.innerHTML = `<p>🎉 ¡Entregas completadas!</p>`;
+                nextAction.innerHTML = `<p>🎉 ¡Todas las entregas han sido completadas!</p>`;
             }
 
             optimizedPath.forEach((item, index) => {
@@ -207,14 +228,16 @@
                     .addTo(markersGroup)
                     .bindPopup(`<b>Parada #${index + 1}</b><br>${item.address}`);
 
+                const mapUrlIndividual = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}&travelmode=driving`;
+
                 const card = document.createElement('div');
                 card.className = 'stop-card';
                 card.innerHTML = `
                     <div><span class="badge">Parada #${index + 1}</span></div>
                     <strong>${item.address}</strong><br>
-                    <button class="btn-secondary" onclick="abrirGoogleMaps(${item.lat}, ${item.lon}, ${index})">
+                    <a href="${mapUrlIndividual}" target="_blank" rel="noopener" class="btn btn-secondary" onclick="completarParada(${index})">
                         Ir a este punto
-                    </button>
+                    </a>
                 `;
                 stopsList.appendChild(card);
             });
@@ -225,11 +248,12 @@
             }
         }
 
-        function abrirGoogleMaps(lat, lon, index) {
-            optimizedPath.splice(index, 1);
-            renderizarRuta();
-            const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
-            window.open(url, '_blank');
+        // Elimina el paquete entregado y actualiza la interfaz
+        function completarParada(index) {
+            setTimeout(() => {
+                optimizedPath.splice(index, 1);
+                renderizarRuta();
+            }, 500);
         }
     </script>
 </body>
