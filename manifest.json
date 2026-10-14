@@ -1,0 +1,22 @@
+{
+  "name": "Ahhheleeera Shstmr Pro",
+  "short_name": "Ahhheleeera",
+  "description": "Optimizador de rutas de reparto para Chilexpress con tráfico en vivo",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#ff5722",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
