@@ -3,76 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ahhheleeera Shstmr Pro - Optimizador de Rutas</title>
-    
-    <!-- Configuración PWA para App Instalable -->
+    <title>Ahhheleeera Shstmr Pro</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ff5722">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Ahhheleeera Pro">
-
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-    <div class="card">
-        <!-- Logo con Fuego Animado -->
-        <div class="header-logo">
-            <svg width="180" height="80" viewBox="0 0 200 90" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20,50 L40,25 L120,25 L150,50 L180,50 L180,65 L20,65 Z" fill="#333" stroke="#ff5722" stroke-width="3"/>
-                <rect x="50" y="32" width="35" height="15" fill="#ff5722" opacity="0.8"/>
-                <rect x="95" y="32" width="25" height="15" fill="#ff5722" opacity="0.8"/>
-                <g class="flame-particle">
-                    <path d="M25,65 C10,65 0,55 5,45 C12,52 15,40 25,50 C20,58 30,60 25,65 Z" fill="#ff9800"/>
-                    <path d="M30,65 C20,65 10,58 15,50 C20,55 22,46 30,55 Z" fill="#ff5722"/>
-                    <path d="M32,65 C26,65 20,60 22,54 C25,58 27,52 32,58 Z" fill="#ffeb3b"/>
-                </g>
-                <g class="flame-particle">
-                    <path d="M115,65 C100,65 90,55 95,45 C102,52 105,40 115,50 C110,58 120,60 115,65 Z" fill="#ff9800"/>
-                    <path d="M120,65 C110,65 100,58 105,50 C110,55 112,46 120,55 Z" fill="#ff5722"/>
-                    <path d="M122,65 C116,65 110,60 112,54 C115,58 117,52 122,58 Z" fill="#ffeb3b"/>
-                </g>
-                <circle cx="45" cy="65" r="14" fill="#111" stroke="#ff5722" stroke-width="4"/>
-                <circle cx="45" cy="65" r="5" fill="#eee"/>
-                <circle cx="135" cy="65" r="14" fill="#111" stroke="#ff5722" stroke-width="4"/>
-                <circle cx="135" cy="65" r="5" fill="#eee"/>
-            </svg>
-            <h1 class="app-title">Ahhheleeera Shstmr Pro</h1>
+    <header class="app-header">
+        <h1 class="app-title">Ahhheleeera Pro</h1>
+    </header>
+
+    <div class="container">
+        <!-- Controles de Configuración -->
+        <div class="card">
+            <div class="toggle-group">
+                <label class="toggle-btn">
+                    <input type="radio" name="vehicleMode" value="car" checked onchange="actualizarModoViaje()">
+                    <span>🚗 Auto</span>
+                </label>
+                <label class="toggle-btn">
+                    <input type="radio" name="vehicleMode" value="bicycle" onchange="actualizarModoViaje()">
+                    <span>🚲 Bicicleta</span>
+                </label>
+            </div>
+
+            <div class="input-group">
+                <label>🗺️ Navegador:</label>
+                <select id="gpsSelect" onchange="guardarPreferenciaGPS()">
+                    <option value="google">Google Maps</option>
+                    <option value="waze">Waze</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>📸 Escáner con IA:</label>
+                <input type="file" id="labelCameraInput" accept="image/*" capture="environment" onchange="escanearEtiquetaConIA(event)" style="display: none;">
+                <button class="btn btn-action" onclick="document.getElementById('labelCameraInput').click()">
+                    📷 Escanear Etiqueta (Dirección + Teléfono)
+                </button>
+            </div>
+
+            <div class="input-group">
+                <label>📦 Direcciones a repartir:</label>
+                <textarea id="addressInput" placeholder="Pega las direcciones aquí..."></textarea>
+            </div>
+            
+            <button class="btn btn-primary" onclick="procesarYOptimizar()">🔥 Optimizar Ruta</button>
+            <button class="btn btn-danger" onclick="limpiarRutaGuardada()">🗑️ Limpiar Ruta</button>
+            <div id="status" class="status-bar">Esperando instrucciones...</div>
         </div>
 
-        <!-- Selector de Navegador GPS -->
-        <div class="config-group">
-            <label for="gpsSelect"><strong>🗺️ Navegador GPS preferido:</strong></label>
-            <select id="gpsSelect" onchange="guardarPreferenciaGPS()">
-                <option value="google">Google Maps (Android Auto / CarPlay)</option>
-                <option value="waze">Waze</option>
-            </select>
+        <!-- Resultados y Mapa -->
+        <div id="routeContainer" style="display: none;">
+            <div id="nextStopAction" class="card highlight-card"></div>
+            <div id="map" class="map-container"></div>
+            <div id="stopsList" class="stops-list"></div>
         </div>
-
-        <!-- Callejero / Autocompletado -->
-        <div class="autocomplete-container">
-            <label for="autocompleteInput"><strong>🔍 Callejero (Escribe una dirección):</strong></label>
-            <input type="text" id="autocompleteInput" placeholder="Ej: Catedral 3040, Santiago..." oninput="onDireccionInput()" autocomplete="off">
-            <div id="suggestionsBox" class="suggestions-box"></div>
-        </div>
-
-        <p style="font-size: 0.85rem; color: #aaa; text-align: center; margin-top: 15px;">Lista de direcciones a repartir (una por línea):</p>
-        <textarea id="addressInput" placeholder="Ejemplo:&#10;Av. Libertador Bernardo O'Higgins 1050, Santiago&#10;Catedral 3040, Santiago&#10;Providencia 1200, Providencia"></textarea>
-        
-        <button class="btn btn-primary" onclick="procesarYOptimizar()">🔥 Optimizar Ruta de Reparto</button>
-        <button class="btn btn-danger" onclick="limpiarRutaGuardada()">🗑️ Limpiar Ruta Guardada</button>
-        <div id="status"></div>
-    </div>
-
-    <div class="card" id="routeContainer" style="display: none;">
-        <h2>Ruta Optimizada</h2>
-        <div id="nextStopAction"></div>
-        <div id="map"></div>
-        <hr style="border-color: #444; margin: 20px 0;">
-        <div id="stopsList"></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
