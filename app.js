@@ -1,31 +1,110 @@
-// Arreglo global de paradas de la ruta
 let optimizedPath = [];
 let map = null;
 let markersGroup = null;
+let debounceTimer = null;
 
-// Claves para el almacenamiento local (localStorage)
 const STORAGE_KEY_PATH = "ahhheleeera_path";
 const STORAGE_KEY_INPUT = "ahhheleeera_input";
+const STORAGE_KEY_GPS = "ahhheleeera_gps_pref";
+const STORAGE_KEY_TOMTOM_KEY = "ahhheleeera_tomtom_key";
 
-// Al cargar la página, restaurar datos previos
+// Registrar Service Worker para PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('Service Worker activo:', reg.scope))
+            .catch(err => console.error('Error Service Worker:', err));
+    });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     restaurarEstadoGuardado();
 });
 
-// Inicializar el mapa interactivo Leaflet
-function initMap(lat, lon) {
-    if (!map) {
-        map = L.map('map').setView([lat, lon], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-        markersGroup = L.layerGroup().addTo(map);
+// Configuración API Key de TomTom
+function guardarApiKeyTomTom() {
+    const keyInput = document.getElementById('tomtomKeyInput').value.trim();
+    if (keyInput) {
+        localStorage.setItem(STORAGE_KEY_TOMTOM_KEY, keyInput);
+        document.getElementById('status').innerText = "🔑 API Key de TomTom guardada correctamente.";
     } else {
-        map.setView([lat, lon], 13);
+        localStorage.removeItem(STORAGE_KEY_TOMTOM_KEY);
+        document.getElementById('status').innerText = "⚠️ API Key eliminada.";
     }
 }
 
-// Fórmula de Haversine para calcular la distancia en kilómetros
+// Consultar matriz de tráfico en tiempo real a TomTom
+async function obtenerMatrizTraficoTomTom(puntos, apiKey) {
+    const url = `https://api.tomtom.com/routing/1/matrix/sync/json?key=${apiKey}`;
+    const bodyPayload = {
+        origins: puntos.map(p => ({ point: { latitude: p.lat, longitude: p.lon } })),
+        destinations: puntos.map(p => ({ point: { latitude: p.lat, longitude: p.lon } }))
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyPayload)
+        });
+
+        if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+        const data = await response.json();
+        
+        const matrix = [];
+        data.matrix.forEach((row, rowIndex) => {
+            matrix[rowIndex] = [];
+            row.forEach((cell, colIndex) => {
+                matrix[rowIndex][colIndex] = cell.response.routeSummary.travelTimeInSeconds;
+            });
+        });
+        return matrix;
+    } catch (error) {
+        console.error("Error al consultar TomTom Traffic:", error);
+        return null;
+    }
+}
+
+// Algoritmo de optimización por tráfico real
+async function optimizarRutaConTraficoReal(puntosValidos, origen) {
+    const apiKey = localStorage.getItem(STORAGE_KEY_TOMTOM_KEY);
+    const todosLosPuntos = [origen, ...puntosValidos];
+
+    if (apiKey) {
+        document.getElementById('status').innerText = "🚦 Consultando tráfico en tiempo real con TomTom...";
+        const matrizTiempos = await obtenerMatrizTraficoTomTom(todosLosPuntos, apiKey);
+
+        if (matrizTiempos) {
+            let noVisitadosIndices = puntosValidos.map((_, index) => index + 1);
+            let rutaOptimizada = [];
+            let indiceActual = 0;
+
+            while (noVisitadosIndices.length > 0) {
+                let proximoIndice = noVisitadosIndices[0];
+                let tiempoMinimo = Infinity;
+
+                for (let i = 0; i < noVisitadosIndices.length; i++) {
+                    let candidatoIndice = noVisitadosIndices[i];
+                    let tiempoConduccion = matrizTiempos[indiceActual][candidatoIndice];
+
+                    if (tiempoConduccion < tiempoMinimo) {
+                        tiempoMinimo = tiempoConduccion;
+                        proximoIndice = candidatoIndice;
+                    }
+                }
+
+                rutaOptimizada.push(todosLosPuntos[proximoIndice]);
+                noVisitadosIndices = noVisitadosIndices.filter(idx => idx !== proximoIndice);
+                indiceActual = proximoIndice;
+            }
+            return rutaOptimizada;
+        }
+    }
+
+    return optimizarRutaHaversine(puntosValidos, origen);
+}
+
+// Algoritmo Haversine de respaldo (Fallback)
 function calcularDistancia(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -36,27 +115,7 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// Consulta asíncrona de geocodificación
-async function geocodificarDireccion(direccion) {
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
-        const data = await response.json();
-        if (data && data.length > 0) {
-            return { 
-                address: direccion, 
-                lat: parseFloat(data[0].lat), 
-                lon: parseFloat(data[0].lon),
-                delivered: false // Propiedad que indica si el paquete fue entregado
-            };
-        }
-    } catch (error) {
-        console.error("Error al geocodificar:", error);
-    }
-    return null;
-}
-
-// Algoritmo de optimización (Vecino más cercano)
-function optimizarRuta(puntos, inicio) {
+function optimizarRutaHaversine(puntos, inicio) {
     let noVisitados = [...puntos];
     let ruta = [];
     let puntoActual = inicio;
@@ -80,7 +139,85 @@ function optimizarRuta(puntos, inicio) {
     return ruta;
 }
 
-// Procesa el texto de entrada y optimiza la ruta
+// Callejero / Autocompletado
+function onDireccionInput() {
+    clearTimeout(debounceTimer);
+    const query = document.getElementById('autocompleteInput').value.trim();
+    const suggestionsBox = document.getElementById('suggestionsBox');
+
+    if (query.length < 3) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=cl&limit=5`);
+            const data = await res.json();
+            
+            suggestionsBox.innerHTML = '';
+            if (data && data.length > 0) {
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerText = item.display_name;
+                    div.onclick = () => seleccionarSugerencia(item.display_name);
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Error autocompletado:", e);
+        }
+    }, 400);
+}
+
+function seleccionarSugerencia(direccionTexto) {
+    const textarea = document.getElementById('addressInput');
+    if (textarea.value.trim() === '') {
+        textarea.value = direccionTexto;
+    } else {
+        textarea.value += '\n' + direccionTexto;
+    }
+    
+    document.getElementById('autocompleteInput').value = '';
+    document.getElementById('suggestionsBox').style.display = 'none';
+    localStorage.setItem(STORAGE_KEY_INPUT, textarea.value);
+}
+
+// Lógica del Mapa
+function initMap(lat, lon) {
+    if (!map) {
+        map = L.map('map').setView([lat, lon], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        markersGroup = L.layerGroup().addTo(map);
+    } else {
+        map.setView([lat, lon], 13);
+    }
+}
+
+async function geocodificarDireccion(direccion) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
+        const data = await response.json();
+        if (data && data.length > 0) {
+            return { 
+                address: direccion, 
+                lat: parseFloat(data[0].lat), 
+                lon: parseFloat(data[0].lon),
+                delivered: false 
+            };
+        }
+    } catch (error) {
+        console.error("Error geocodificando:", error);
+    }
+    return null;
+}
+
 async function procesarYOptimizar() {
     const statusDiv = document.getElementById('status');
     const rawText = document.getElementById('addressInput').value.trim();
@@ -90,7 +227,6 @@ async function procesarYOptimizar() {
     }
 
     localStorage.setItem(STORAGE_KEY_INPUT, rawText);
-
     const lineas = rawText.split('\n').filter(line => line.trim() !== '');
     statusDiv.innerText = `Obteniendo ubicación GPS...`;
 
@@ -117,14 +253,12 @@ async function procesarYOptimizar() {
             return;
         }
 
-        statusDiv.innerText = "Calculando orden óptimo...";
-        optimizedPath = optimizarRuta(puntosValidos, origen);
+        optimizedPath = await optimizarRutaConTraficoReal(puntosValidos, origen);
 
         guardarEnStorage();
-
         initMap(origen.lat, origen.lon);
         renderizarRuta();
-        statusDiv.innerText = "¡Ruta calculada con éxito!";
+        statusDiv.innerText = "¡Ruta calculada con éxito considerando el tráfico!";
     }, (error) => {
         console.error("Error GPS:", error);
         alert("Error al obtener la ubicación GPS.");
@@ -132,43 +266,47 @@ async function procesarYOptimizar() {
     }, geoOptions);
 }
 
-// Renderizar la lista de entregas y marcadores del mapa
+function obtenerUrlNavegacion(lat, lon) {
+    const gpsPref = localStorage.getItem(STORAGE_KEY_GPS) || "google";
+    if (gpsPref === "waze") {
+        return `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
+}
+
 function renderizarRuta() {
     document.getElementById('routeContainer').style.display = 'block';
     const stopsList = document.getElementById('stopsList');
     const nextAction = document.getElementById('nextStopAction');
-    stopsList.innerHTML = '';
+    const gpsPref = localStorage.getItem(STORAGE_KEY_GPS) || "google";
     
-    if (markersGroup) {
-        markersGroup.clearLayers();
-    }
+    stopsList.innerHTML = '';
+    if (markersGroup) markersGroup.clearLayers();
 
     let polylinePoints = [];
-
-    // Buscar la primera parada que aún NO esté entregada para la acción prioritaria
     const siguientePendienteIndex = optimizedPath.findIndex(item => !item.delivered);
 
     if (siguientePendienteIndex !== -1) {
         const siguiente = optimizedPath[siguientePendienteIndex];
-        const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${siguiente.lat},${siguiente.lon}&travelmode=driving`;
+        const mapUrl = obtenerUrlNavegacion(siguiente.lat, siguiente.lon);
+        const btnClass = gpsPref === 'waze' ? 'btn btn-waze' : 'btn btn-success';
+        const btnTexto = gpsPref === 'waze' ? '🚙 Navegar con Waze' : '🚀 Navegar con Google Maps / Android Auto';
         
         nextAction.innerHTML = `
             <p><strong>🔥 Siguiente entrega pendiente (#${siguientePendienteIndex + 1}):</strong><br>${siguiente.address}</p>
-            <a href="${mapUrl}" target="_blank" rel="noopener" class="btn btn-success">
-                🚀 Navegar en Maps / Android Auto
+            <a href="${mapUrl}" target="_blank" rel="noopener" class="${btnClass}">
+                ${btnTexto}
             </a>
         `;
     } else if (optimizedPath.length > 0) {
-        nextAction.innerHTML = `<p>🎉 ¡Todos los paquetes de la lista han sido repartidos!</p>`;
+        nextAction.innerHTML = `<p>🎉 ¡Todos los paquetes han sido repartidos!</p>`;
     } else {
         nextAction.innerHTML = `<p>No hay paradas en la lista.</p>`;
     }
 
-    // Dibujar cada tarjeta y marcador
     optimizedPath.forEach((item, index) => {
         polylinePoints.push([item.lat, item.lon]);
 
-        // Crear marcador en el mapa
         const classIcon = item.delivered ? 'number-icon number-icon-delivered' : 'number-icon';
         const customIcon = L.divIcon({ className: classIcon, html: `${index + 1}`, iconSize: [25, 25] });
 
@@ -179,13 +317,11 @@ function renderizarRuta() {
                 .bindPopup(`<b>Parada #${index + 1} (${estadoTexto})</b><br>${item.address}`);
         }
 
-        // Crear elemento de tarjeta
+        const mapUrlGoogle = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}&travelmode=driving`;
+        const mapUrlWaze = `https://waze.com/ul?ll=${item.lat},${item.lon}&navigate=yes`;
+
         const card = document.createElement('div');
         card.className = `stop-card ${item.delivered ? 'delivered' : ''}`;
-        card.draggable = true; // Habilita Drag and Drop
-        card.dataset.index = index;
-
-        const mapUrlIndividual = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}&travelmode=driving`;
 
         card.innerHTML = `
             <div class="stop-header">
@@ -200,9 +336,14 @@ function renderizarRuta() {
             
             <div class="stop-address"><strong>${item.address}</strong></div>
             
-            <a href="${mapUrlIndividual}" target="_blank" rel="noopener" class="btn btn-secondary btn-small">
-                🧭 Navegar a este punto
-            </a>
+            <div style="margin-top: 5px;">
+                <a href="${mapUrlGoogle}" target="_blank" rel="noopener" class="btn btn-secondary btn-small">
+                    🗺️ Google Maps
+                </a>
+                <a href="${mapUrlWaze}" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="background: #0099ff;">
+                    🚙 Waze
+                </a>
+            </div>
 
             <label class="checkbox-container">
                 <input type="checkbox" ${item.delivered ? 'checked' : ''} onchange="toggleRepartido(${index})">
@@ -210,35 +351,25 @@ function renderizarRuta() {
             </label>
         `;
 
-        // Eventos para Drag and Drop
-        card.addEventListener('dragstart', handleDragStart);
-        card.addEventListener('dragover', handleDragOver);
-        card.addEventListener('drop', handleDrop);
-        card.addEventListener('dragend', handleDragEnd);
-
         stopsList.appendChild(card);
     });
 
-    // Trazar línea de ruta en el mapa
     if (map && markersGroup && polylinePoints.length > 0) {
         const polyline = L.polyline(polylinePoints, { color: '#ff5722', weight: 4 }).addTo(markersGroup);
         map.fitBounds(polyline.getBounds());
     }
 }
 
-// Función para cambiar el estado de "Repartido" (Check)
 function toggleRepartido(index) {
     optimizedPath[index].delivered = !optimizedPath[index].delivered;
     guardarEnStorage();
     renderizarRuta();
 }
 
-// Mover posición arriba (-1) o abajo (+1) con botones
 function moverParada(index, direccion) {
     const nuevoIndice = index + direccion;
     if (nuevoIndice < 0 || nuevoIndice >= optimizedPath.length) return;
 
-    // Intercambiar elementos
     const temp = optimizedPath[index];
     optimizedPath[index] = optimizedPath[nuevoIndice];
     optimizedPath[nuevoIndice] = temp;
@@ -247,39 +378,12 @@ function moverParada(index, direccion) {
     renderizarRuta();
 }
 
-// --- Eventos de Drag & Drop ---
-let dragSrcIndex = null;
-
-function handleDragStart(e) {
-    dragSrcIndex = parseInt(this.dataset.index);
-    this.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
+function guardarPreferenciaGPS() {
+    const val = document.getElementById('gpsSelect').value;
+    localStorage.setItem(STORAGE_KEY_GPS, val);
+    renderizarRuta();
 }
 
-function handleDragOver(e) {
-    if (e.preventDefault) e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    return false;
-}
-
-function handleDrop(e) {
-    if (e.stopPropagation) e.stopPropagation();
-    const targetIndex = parseInt(this.dataset.index);
-
-    if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
-        const movedItem = optimizedPath.splice(dragSrcIndex, 1)[0];
-        optimizedPath.splice(targetIndex, 0, movedItem);
-        guardarEnStorage();
-        renderizarRuta();
-    }
-    return false;
-}
-
-function handleDragEnd() {
-    this.classList.remove('dragging');
-}
-
-// --- Guardado y Restauración ---
 function guardarEnStorage() {
     localStorage.setItem(STORAGE_KEY_PATH, JSON.stringify(optimizedPath));
 }
@@ -287,6 +391,18 @@ function guardarEnStorage() {
 function restaurarEstadoGuardado() {
     const savedInput = localStorage.getItem(STORAGE_KEY_INPUT);
     const savedPath = localStorage.getItem(STORAGE_KEY_PATH);
+    const savedGps = localStorage.getItem(STORAGE_KEY_GPS);
+    const savedTomTomKey = localStorage.getItem(STORAGE_KEY_TOMTOM_KEY);
+
+    if (savedTomTomKey) {
+        const keyElem = document.getElementById('tomtomKeyInput');
+        if (keyElem) keyElem.value = savedTomTomKey;
+    }
+
+    if (savedGps) {
+        const gpsElem = document.getElementById('gpsSelect');
+        if (gpsElem) gpsElem.value = savedGps;
+    }
 
     if (savedInput) {
         document.getElementById('addressInput').value = savedInput;
@@ -301,7 +417,7 @@ function restaurarEstadoGuardado() {
                 document.getElementById('status').innerText = "Ruta anterior restaurada automáticamente.";
             }
         } catch (e) {
-            console.error("Error al restaurar datos:", e);
+            console.error("Error leyendo datos guardados:", e);
         }
     }
 }
