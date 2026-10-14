@@ -1,12 +1,17 @@
+// ==========================================
+// VARIABLES GLOBALES Y LLAVES DE ALMACENAMIENTO
+// ==========================================
 let optimizedPath = [];
 let map = null;
 let markersGroup = null;
 let debounceTimer = null;
 
+// PEGA TU CLAVE DE TOMTOM AQUÍ ENTRE LAS COMILLAS
+const TOMTOM_API_KEY = "Bvdb3uwEWlC1fwPKzATxGORsac2mn5g6";
+
 const STORAGE_KEY_PATH = "ahhheleeera_path";
 const STORAGE_KEY_INPUT = "ahhheleeera_input";
 const STORAGE_KEY_GPS = "ahhheleeera_gps_pref";
-const STORAGE_KEY_TOMTOM_KEY = "ahhheleeera_tomtom_key";
 
 // Registrar Service Worker para PWA
 if ('serviceWorker' in navigator) {
@@ -20,18 +25,6 @@ if ('serviceWorker' in navigator) {
 document.addEventListener("DOMContentLoaded", () => {
     restaurarEstadoGuardado();
 });
-
-// Configuración API Key de TomTom
-function guardarApiKeyTomTom() {
-    const keyInput = document.getElementById('tomtomKeyInput').value.trim();
-    if (keyInput) {
-        localStorage.setItem(STORAGE_KEY_TOMTOM_KEY, keyInput);
-        document.getElementById('status').innerText = "🔑 API Key de TomTom guardada correctamente.";
-    } else {
-        localStorage.removeItem(STORAGE_KEY_TOMTOM_KEY);
-        document.getElementById('status').innerText = "⚠️ API Key eliminada.";
-    }
-}
 
 // Consultar matriz de tráfico en tiempo real a TomTom
 async function obtenerMatrizTraficoTomTom(puntos, apiKey) {
@@ -67,10 +60,10 @@ async function obtenerMatrizTraficoTomTom(puntos, apiKey) {
 
 // Algoritmo de optimización por tráfico real
 async function optimizarRutaConTraficoReal(puntosValidos, origen) {
-    const apiKey = localStorage.getItem(STORAGE_KEY_TOMTOM_KEY);
+    const apiKey = TOMTOM_API_KEY.trim();
     const todosLosPuntos = [origen, ...puntosValidos];
 
-    if (apiKey) {
+    if (apiKey && apiKey !== "PEGA_AQUI_TU_CLAVE_REAL_DE_TOMTOM") {
         document.getElementById('status').innerText = "🚦 Consultando tráfico en tiempo real con TomTom...";
         const matrizTiempos = await obtenerMatrizTraficoTomTom(todosLosPuntos, apiKey);
 
@@ -392,12 +385,6 @@ function restaurarEstadoGuardado() {
     const savedInput = localStorage.getItem(STORAGE_KEY_INPUT);
     const savedPath = localStorage.getItem(STORAGE_KEY_PATH);
     const savedGps = localStorage.getItem(STORAGE_KEY_GPS);
-    const savedTomTomKey = localStorage.getItem(STORAGE_KEY_TOMTOM_KEY);
-
-    if (savedTomTomKey) {
-        const keyElem = document.getElementById('tomtomKeyInput');
-        if (keyElem) keyElem.value = savedTomTomKey;
-    }
 
     if (savedGps) {
         const gpsElem = document.getElementById('gpsSelect');
