@@ -1,10 +1,12 @@
 let optimizedPath = [];
 let map = null;
 let markersGroup = null;
+let debounceTimer = null;
 
-// Reemplaza con tus claves reales
-const TOMTOM_API_KEY = "Bvdb3uwEWlC1fwP" + "KzATxGORsac2mn5g6"; 
-const GEMINI_API_KEY = "AQ.Ab8RN6LLZ84" + "-RHhXBItfw5nfXepjm7HFv4FSHek-H63rSvdhCA";
+// Reemplaza con tus claves reales partidas con el signo +
+const TOMTOM_API_KEY = "Bvdb3uwEWlC1fwP" + "KzATxGORsac2mn5g6" ; 
+const GEMINI_API_KEY = "AQ.Ab8RN6LLZ84" + "-RHhXBItfw5nfXepjm7HFv4FSHek-H63rSvdhCA" ; 
+
 const STORAGE_KEY_PATH = "ahhheleeera_path";
 const STORAGE_KEY_INPUT = "ahhheleeera_input";
 const STORAGE_KEY_GPS = "ahhheleeera_gps_pref";
@@ -20,6 +22,79 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ==========================================
+// MODO VIAJE Y CAMBIO DE LOGO SVG
+// ==========================================
+function actualizarModoViaje() {
+    const modo = document.querySelector('input[name="vehicleMode"]:checked').value;
+    localStorage.setItem(STORAGE_KEY_MODE, modo);
+    
+    // Cambia el logo en el Header
+    if (modo === "bicycle") {
+        document.getElementById('logo-car').style.display = 'none';
+        document.getElementById('logo-bike').style.display = 'block';
+    } else {
+        document.getElementById('logo-car').style.display = 'block';
+        document.getElementById('logo-bike').style.display = 'none';
+    }
+}
+
+// ==========================================
+// CALLEJERO / AUTOCOMPLETADO (Solo RM)
+// ==========================================
+function onDireccionInput() {
+    clearTimeout(debounceTimer);
+    const query = document.getElementById('autocompleteInput').value.trim();
+    const suggestionsBox = document.getElementById('suggestionsBox');
+
+    if (query.length < 3) {
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+        try {
+            // Se fuerza la búsqueda en Santiago de Chile
+            const q = encodeURIComponent(query + ", Región Metropolitana, Chile");
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&countrycodes=cl&limit=5`);
+            const data = await res.json();
+            
+            suggestionsBox.innerHTML = '';
+            if (data && data.length > 0) {
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    
+                    let textoLimpio = item.display_name.replace(", Región Metropolitana de Santiago", "").replace(", Chile", "");
+                    
+                    div.innerText = textoLimpio;
+                    div.onclick = () => seleccionarSugerencia(textoLimpio);
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Error en autocompletado:", e);
+        }
+    }, 400);
+}
+
+function seleccionarSugerencia(direccionTexto) {
+    const textarea = document.getElementById('addressInput');
+    if (textarea.value.trim() === '') {
+        textarea.value = direccionTexto;
+    } else {
+        textarea.value += '\n' + direccionTexto;
+    }
+    
+    document.getElementById('autocompleteInput').value = '';
+    document.getElementById('suggestionsBox').style.display = 'none';
+    localStorage.setItem(STORAGE_KEY_INPUT, textarea.value);
+}
+
+
+// ==========================================
 // ESCÁNER IA GEMINI (DIRECCIÓN + TELÉFONO)
 // ==========================================
 async function escanearEtiquetaConIA(event) {
@@ -27,7 +102,7 @@ async function escanearEtiquetaConIA(event) {
     if (!archivo) return;
 
     const statusDiv = document.getElementById('status');
-    statusDiv.innerText = "🔍 Analizando etiqueta con IA...";
+    statusDiv.innerText = "🔍 HACKEANDO ETIQUETA CON IA...";
 
     const lector = new FileReader();
     lector.onload = async function(e) {
@@ -57,13 +132,13 @@ async function escanearEtiquetaConIA(event) {
                     localStorage.setItem(STORAGE_KEY_INPUT, textarea.value);
                     
                     if (resultado.telefono) guardarTelefono(resultado.direccion, resultado.telefono);
-                    statusDiv.innerText = `✅ Agregado: ${resultado.direccion}`;
+                    statusDiv.innerText = `✅ OBJETIVO AGREGADO: ${resultado.direccion}`;
                 }
             } else {
-                statusDiv.innerText = "⚠️ No se pudo leer la etiqueta.";
+                statusDiv.innerText = "⚠️ OJO BIÓNICO FALLÓ. NO SE LEE LA ETIQUETA.";
             }
         } catch (error) {
-            statusDiv.innerText = "❌ Error con la IA.";
+            statusDiv.innerText = "❌ ERROR DE CONEXIÓN CON LA IA.";
         }
         event.target.value = '';
     };
@@ -86,14 +161,8 @@ function obtenerTelefono(direccion) {
 // ==========================================
 // MOTOR DE OPTIMIZACIÓN TOMTOM (AUTO / BICI)
 // ==========================================
-function actualizarModoViaje() {
-    const modo = document.querySelector('input[name="vehicleMode"]:checked').value;
-    localStorage.setItem(STORAGE_KEY_MODE, modo);
-}
-
 async function obtenerMatrizTomTom(puntos) {
     const modo = localStorage.getItem(STORAGE_KEY_MODE) || "car";
-    // Si es bicicleta, TomTom adapta la ruta usando carriles bici y calles permitidas
     const url = `https://api.tomtom.com/routing/1/matrix/sync/json?key=${TOMTOM_API_KEY}&travelMode=${modo}`;
     const payload = {
         origins: puntos.map(p => ({ point: { latitude: p.lat, longitude: p.lon } })),
@@ -115,7 +184,7 @@ async function obtenerMatrizTomTom(puntos) {
 
 async function optimizarRuta(puntosValidos, origen) {
     const todos = [origen, ...puntosValidos];
-    if (TOMTOM_API_KEY !== "TU_CLAVE_TOMTOM_AQUI") {
+    if (!TOMTOM_API_KEY.includes("PEGA_AQUI")) {
         const matriz = await obtenerMatrizTomTom(todos);
         if (matriz) {
             let pendientes = puntosValidos.map((_, i) => i + 1);
@@ -137,7 +206,7 @@ async function optimizarRuta(puntosValidos, origen) {
             return ruta;
         }
     }
-    return puntosValidos; // Fallback simplificado
+    return puntosValidos; 
 }
 
 // ==========================================
@@ -146,11 +215,11 @@ async function optimizarRuta(puntosValidos, origen) {
 async function procesarYOptimizar() {
     const statusDiv = document.getElementById('status');
     const rawText = document.getElementById('addressInput').value.trim();
-    if (!rawText) return alert("Ingresa direcciones.");
+    if (!rawText) return alert("¡SIN OBJETIVOS! Pega las direcciones primero.");
 
     localStorage.setItem(STORAGE_KEY_INPUT, rawText);
     const lineas = rawText.split('\n').filter(line => line.trim() !== '');
-    statusDiv.innerText = "📍 Buscando coordenadas...";
+    statusDiv.innerText = "📍 RASTREANDO COORDENADAS...";
 
     navigator.geolocation.getCurrentPosition(async (pos) => {
         const origen = { address: "Origen", lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -163,14 +232,14 @@ async function procesarYOptimizar() {
             await new Promise(r => setTimeout(r, 400));
         }
 
-        statusDiv.innerText = "🚦 Calculando la mejor ruta...";
+        statusDiv.innerText = "🚦 DESTRUYENDO RUTAS INÚTILES...";
         optimizedPath = await optimizarRuta(validos, origen);
         
         guardarEnStorage();
         initMap(origen.lat, origen.lon);
         renderizarRuta();
-        statusDiv.innerText = "¡Ruta lista!";
-    }, () => alert("Activa el GPS."), { enableHighAccuracy: true });
+        statusDiv.innerText = "⚡ ¡RUTA LISTA PARA LA ACCIÓN!";
+    }, () => alert("¡ACTIVA EL GPS!"), { enableHighAccuracy: true });
 }
 
 function initMap(lat, lon) {
@@ -185,7 +254,7 @@ function generarEnlaces(lat, lon, direccion) {
     const modo = localStorage.getItem(STORAGE_KEY_MODE) || "car";
     const googleMode = modo === "bicycle" ? "bicycling" : "driving";
     const telefono = obtenerTelefono(direccion);
-    const msg = encodeURIComponent(`¡Hola! Tu paquete va en camino a: ${direccion}.`);
+    const msg = encodeURIComponent(`¡Qué tal! Tu encargo va en camino a: ${direccion}. Sal a recibirlo pronto.`);
     
     return {
         google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=${googleMode}`,
@@ -212,12 +281,12 @@ function renderizarRuta() {
         const urlNavegador = prefGPS === 'waze' ? links.waze : links.google;
         
         nextAction.innerHTML = `
-            <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: bold; margin-bottom: 5px;">SIGUIENTE ENTREGA (#${sigIndex + 1})</p>
-            <p style="font-size: 1.1rem; font-weight: bold; margin-bottom: 12px;">${sig.address}</p>
-            <a href="${urlNavegador}" target="_blank" class="btn btn-success">🚀 Navegar a Destino</a>
+            <p style="color: var(--danger); font-size: 0.9rem; font-weight: 900; margin-bottom: 5px; font-family: monospace;">[ OBJETIVO INMEDIATO: #${sigIndex + 1} ]</p>
+            <p style="font-size: 1.2rem; font-weight: 900; margin-bottom: 15px; text-transform: uppercase;">${sig.address}</p>
+            <a href="${urlNavegador}" target="_blank" class="btn btn-primary" style="box-shadow: 4px 4px 0px var(--danger);">🚀 NAVEGAR Y DESTRUIR MISION</a>
         `;
     } else {
-        nextAction.innerHTML = `<p>🎉 ¡Ruta completada!</p>`;
+        nextAction.innerHTML = `<p style="font-family: monospace; font-weight: bold; color: var(--primary);">🎉 ¡TODO ENTREGADO, MISIÓN CUMPLIDA!</p>`;
     }
 
     optimizedPath.forEach((item, idx) => {
@@ -231,7 +300,7 @@ function renderizarRuta() {
         card.className = `stop-card ${item.delivered ? 'delivered' : ''}`;
         card.innerHTML = `
             <div class="stop-header">
-                <span class="badge ${item.delivered ? 'badge-delivered' : ''}">Parada #${idx + 1}</span>
+                <span class="badge ${item.delivered ? 'badge-delivered' : ''}">OBJETIVO #${idx + 1}</span>
                 <div class="reorder-controls">
                     <button class="reorder-btn" onclick="moverParada(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>🔼</button>
                     <button class="reorder-btn" onclick="moverParada(${idx}, 1)" ${idx === optimizedPath.length - 1 ? 'disabled' : ''}>🔽</button>
@@ -239,20 +308,20 @@ function renderizarRuta() {
             </div>
             <div class="stop-address">${item.address}</div>
             <div class="action-row">
-                <a href="${links.google}" target="_blank" class="btn btn-secondary btn-small">🗺️ Maps</a>
-                <a href="${links.waze}" target="_blank" class="btn btn-secondary btn-small" style="background: var(--waze); color: black;">🚙 Waze</a>
-                <a href="${links.whatsapp}" target="_blank" class="btn btn-secondary btn-small btn-whatsapp">💬 ${links.telGuardado ? 'WhatsApp' : 'Avisar'}</a>
+                <a href="${links.google}" target="_blank" class="btn btn-secondary btn-small">🗺️ MAPS</a>
+                <a href="${links.waze}" target="_blank" class="btn btn-secondary btn-small" style="background: var(--waze); color: black;">🚙 WAZE</a>
+                <a href="${links.whatsapp}" target="_blank" class="btn btn-secondary btn-small btn-whatsapp">💬 ${links.telGuardado ? 'WHATSAPP' : 'AVISAR'}</a>
             </div>
             <label class="checkbox-container">
                 <input type="checkbox" ${item.delivered ? 'checked' : ''} onchange="toggleRepartido(${idx})">
-                <span>Marcar como Entregado</span>
+                <span>[X] MARCAR COMO LIQUIDADO</span>
             </label>
         `;
         list.appendChild(card);
     });
 
     if (markersGroup && puntosLinea.length > 0) {
-        L.polyline(puntosLinea, { color: '#ff5722', weight: 4 }).addTo(markersGroup);
+        L.polyline(puntosLinea, { color: '#ccff00', weight: 5 }).addTo(markersGroup);
         map.fitBounds(L.polyline(puntosLinea).getBounds());
     }
 }
@@ -262,11 +331,12 @@ function toggleRepartido(idx) { optimizedPath[idx].delivered = !optimizedPath[id
 function moverParada(idx, dir) { const n = idx + dir; if (n < 0 || n >= optimizedPath.length) return; const t = optimizedPath[idx]; optimizedPath[idx] = optimizedPath[n]; optimizedPath[n] = t; guardarEnStorage(); renderizarRuta(); }
 function guardarPreferenciaGPS() { localStorage.setItem(STORAGE_KEY_GPS, document.getElementById('gpsSelect').value); renderizarRuta(); }
 function guardarEnStorage() { localStorage.setItem(STORAGE_KEY_PATH, JSON.stringify(optimizedPath)); }
-function limpiarRutaGuardada() { localStorage.removeItem(STORAGE_KEY_PATH); localStorage.removeItem(STORAGE_KEY_INPUT); optimizedPath = []; document.getElementById('addressInput').value = ''; document.getElementById('routeContainer').style.display = 'none'; document.getElementById('status').innerText = "Ruta borrada."; }
+function limpiarRutaGuardada() { localStorage.removeItem(STORAGE_KEY_PATH); localStorage.removeItem(STORAGE_KEY_INPUT); optimizedPath = []; document.getElementById('addressInput').value = ''; document.getElementById('routeContainer').style.display = 'none'; document.getElementById('status').innerText = "SISTEMA LIMPIO."; }
 
 function restaurarEstadoGuardado() {
-    const modo = localStorage.getItem(STORAGE_KEY_MODE);
-    if (modo) document.querySelector(`input[value="${modo}"]`).checked = true;
+    const modo = localStorage.getItem(STORAGE_KEY_MODE) || 'car';
+    document.querySelector(`input[value="${modo}"]`).checked = true;
+    actualizarModoViaje();
     
     const gps = localStorage.getItem(STORAGE_KEY_GPS);
     if (gps) document.getElementById('gpsSelect').value = gps;
