@@ -1,27 +1,27 @@
-# 🔥 Ahhheleeera Shstmr Pro - Optimizador de Rutas de Reparto
+# 🔥 Ahhheleeera Shstmr Pro - Optimizador de Rutas de Reparto (PWA v1.3.0)
 
-Aplicación web interactiva y modular diseñada para la optimización de rutas de logística y entrega de paquetes, integrada con **Leaflet.js**, **OpenStreetMap**, almacenamiento local persistente y enlaces directos a **Google Maps / Android Auto**.
+Aplicación web progresiva (PWA) e interactiva diseñada para la optimización de rutas de logística y entrega de paquetes, integrada con **TomTom Traffic API**, **Leaflet.js**, **Waze**, **Google Maps / Android Auto** y un **Callejero con Autocompletado**.
 
 ---
 
 ## 🚀 Características Principales
 
-- **Optimización de Ruta:** Algoritmo del Vecino Más Cercano (Nearest Neighbor) basado en la fórmula de Haversine para encontrar la secuencia de reparto más rápida.
-- **Geocodificación Asíncrona:** Consulta pública a la API de Nominatim (OpenStreetMap).
-- **Mapa Interactivo:** Marcadores numerados dinámicos con trazado de polyline mediante Leaflet.js.
-- **Reordenamiento Manual:** Cambia el orden de los paquetes en tiempo real usando botones `🔼` / `🔽` o mediante arrastrar y soltar (*Drag & Drop*).
-- **Control de Estado de Entregas:** Marca paquetes como "Repartido / Entregado" con cambio visual en tarjetas y marcadores verdes en el mapa.
-- **Persistencia de Datos (`localStorage`):** Restaura automáticamente la lista y el estado de reparto al recargar la página o reabrir el navegador.
-- **Integración con Android Auto & iOS:** Generación de enlaces compatibles con Google Maps en Android y Safari en iOS.
+- **Tráfico en Tiempo Real:** Integración con TomTom Matrix Routing API para calcular la secuencia óptima considerando la congestión vehicular en vivo.
+- **Callejero Inteligente:** Buscador dinámico con autocompletado en tiempo real sobre la red vial de Chile (OpenStreetMap / Nominatim).
+- **Soporte PWA Instalable:** Funciona como aplicación independiente en la pantalla de inicio de Android e iOS mediante Service Worker y Web App Manifest.
+- **Multinavegador GPS:** Conexión directa a través de Deep Links con Google Maps (compatible con Android Auto / CarPlay) y Waze.
+- **Controles de Reparto:** Reordenamiento manual de paradas (`🔼`/`🔽`), casillas de verificación ("Repartido / Entregado") y marcadores dinámicos de estado verde en el mapa.
+- **Persistencia Local (`localStorage`):** Guardado automático del estado de la lista de paquetes, preferencias de GPS y la clave API de TomTom.
 
 ---
 
-## 📂 Estructura del Proyecto
-
-El código está organizado de forma modular para facilitar su mantenimiento y desarrollo colaborativo:
+## 📂 Estructura del Repositorio
 
 ```text
 ahhheleeera-shstmr-pro/
-├── index.html   # Estructura HTML5 y contenedores principales
-├── styles.css   # Estilos CSS3, modo oscuro y animaciones SVG
-└── app.js       # Lógica JavaScript (Algoritmos, Leaflet, Eventos y localStorage)
+├── index.html     # Estructura de la Single Page Application (SPA) y contenedores
+├── styles.css     # Estilos CSS3 en modo oscuro, mapa y animaciones SVG
+├── app.js         # Lógica principal, TomTom Traffic API, Leaflet y Callejero
+├── manifest.json  # Configuración para instalación PWA en dispositivos móviles
+├── sw.js          # Service Worker para gestión de caché offline
+└── README.md      # Documentación técnica del proyecto
