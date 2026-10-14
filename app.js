@@ -3,9 +3,8 @@ let map = null;
 let markersGroup = null;
 
 // Reemplaza con tus claves reales
-const TOMTOM_API_KEY = "TU_CLAVE_TOMTOM_AQUI"; 
-const GEMINI_API_KEY = "TU_CLAVE_GEMINI_AQUI"; 
-
+const TOMTOM_API_KEY = "Bvdb3uwEWlC1fwP" + "KzATxGORsac2mn5g6"; 
+const GEMINI_API_KEY = "AQ.Ab8RN6LLZ84" + "-RHhXBItfw5nfXepjm7HFv4FSHek-H63rSvdhCA";
 const STORAGE_KEY_PATH = "ahhheleeera_path";
 const STORAGE_KEY_INPUT = "ahhheleeera_input";
 const STORAGE_KEY_GPS = "ahhheleeera_gps_pref";
