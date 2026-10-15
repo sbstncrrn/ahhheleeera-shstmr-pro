@@ -265,9 +265,10 @@ function generarEnlaces(lat, lon, direccion) {
     const telefono = obtenerTelefono(direccion);
     const msg = encodeURIComponent(`¡Qué tal! Tu encargo va en camino a: ${direccion}. Sal a recibirlo pronto.`);
     
+    // El parámetro &navigate=yes&_t=${Date.now()} fuerza a Waze a sobreescribir rutas anteriores
     return {
         google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=${googleMode}`,
-        waze: `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`,
+        waze: `https://waze.com/ul?ll=${lat},${lon}&navigate=yes&_t=${Date.now()}`,
         whatsapp: telefono ? `https://api.whatsapp.com/send?phone=${telefono}&text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`,
         telGuardado: !!telefono
     };
