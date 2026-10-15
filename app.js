@@ -39,11 +39,12 @@ function actualizarModoViaje() {
 }
 
 // ==========================================
-// CALLEJERO / AUTOCOMPLETADO (Solo RM)
+// CALLEJERO / AUTOCOMPLETADO INTELIGENTE (Solo RM)
 // ==========================================
 function onDireccionInput() {
     clearTimeout(debounceTimer);
-    const query = document.getElementById('autocompleteInput').value.trim();
+    const inputElement = document.getElementById('autocompleteInput');
+    const query = inputElement.value.trim();
     const suggestionsBox = document.getElementById('suggestionsBox');
 
     if (query.length < 3) {
@@ -53,9 +54,11 @@ function onDireccionInput() {
 
     debounceTimer = setTimeout(async () => {
         try {
-            // Se fuerza la búsqueda en Santiago de Chile
+            // Restringimos la búsqueda con una "caja de coordenadas" (Viewbox) estricta sobre la RM
             const q = encodeURIComponent(query + ", Región Metropolitana, Chile");
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&countrycodes=cl&limit=5`);
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${q}&countrycodes=cl&viewbox=-71.5,-33.0,-70.0,-34.0&bounded=1&limit=5`;
+            
+            const res = await fetch(url);
             const data = await res.json();
             
             suggestionsBox.innerHTML = '';
@@ -67,7 +70,7 @@ function onDireccionInput() {
                     let textoLimpio = item.display_name.replace(", Región Metropolitana de Santiago", "").replace(", Chile", "");
                     
                     div.innerText = textoLimpio;
-                    div.onclick = () => seleccionarSugerencia(textoLimpio);
+                    div.onclick = () => seleccionarSugerencia(textoLimpio, query);
                     suggestionsBox.appendChild(div);
                 });
                 suggestionsBox.style.display = 'block';
@@ -75,24 +78,30 @@ function onDireccionInput() {
                 suggestionsBox.style.display = 'none';
             }
         } catch (e) {
-            console.error("Error en autocompletado:", e);
+            console.error("Error en radar de calles:", e);
         }
     }, 400);
 }
 
-function seleccionarSugerencia(direccionTexto) {
-    const textarea = document.getElementById('addressInput');
-    if (textarea.value.trim() === '') {
-        textarea.value = direccionTexto;
-    } else {
-        textarea.value += '\n' + direccionTexto;
+function seleccionarSugerencia(direccionSugerida, textoOriginal) {
+    // Extraemos cualquier número que el usuario haya escrito originalmente
+    const numeroExtraido = textoOriginal.match(/\d+/);
+    let direccionFinal = direccionSugerida;
+
+    // Si el usuario escribió un número, pero la sugerencia de la API no lo trae, se lo inyectamos a la fuerza
+    if (numeroExtraido && !direccionSugerida.includes(numeroExtraido[0])) {
+        let partes = direccionSugerida.split(',');
+        partes[0] = `${partes[0]} ${numeroExtraido[0]}`; // Lo pegamos justo después del nombre de la calle
+        direccionFinal = partes.join(',');
     }
+
+    const textarea = document.getElementById('addressInput');
+    textarea.value += (textarea.value.trim() === '' ? '' : '\n') + direccionFinal;
     
     document.getElementById('autocompleteInput').value = '';
     document.getElementById('suggestionsBox').style.display = 'none';
     localStorage.setItem(STORAGE_KEY_INPUT, textarea.value);
 }
-
 
 // ==========================================
 // ESCÁNER IA GEMINI (DIRECCIÓN + TELÉFONO)
